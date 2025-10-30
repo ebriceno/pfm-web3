@@ -1,0 +1,474 @@
+# Supply Chain Tracker - Cursor Rules
+
+## 🎯 Project Overview
+This is a blockchain-based supply chain tracking DApp with:
+- **Smart Contracts**: Solidity + Foundry
+- **Frontend**: Next.js 16 + TypeScript + Tailwind CSS v4
+- **Blockchain**: Local Anvil testnet
+
+---
+
+## 📋 Technology Stack & Versions
+
+### Smart Contracts
+- **Solidity**: ^0.8.20
+- **Foundry**: Latest stable
+- **Testing Framework**: Forge (Foundry)
+- **Dependencies**: forge-std
+
+### Frontend
+- **Next.js**: 16.0.1 (App Router)
+- **React**: 19.2.0
+- **TypeScript**: ^5
+- **Tailwind CSS**: ^4
+- **Web3 Library**: ethers.js v6.x
+- **UI Components**: Radix UI (Shadcn UI)
+
+---
+
+## 🏗️ Architecture Patterns
+
+### Smart Contract Architecture
+```
+Patterns to follow:
+- Single contract for all functionality (SupplyChain.sol)
+- Enum-based state machines for User and Transfer status
+- Mapping-based storage for efficient access
+- Event emission for all state changes
+- Modifier-based access control
+- No inheritance (keep it simple for learning)
+```
+
+### Frontend Architecture
+```
+Patterns to follow:
+- Server Components by default
+- Client Components only when needed (use "use client")
+- Context API for Web3 state management
+- Custom hooks for business logic
+- Service layer for blockchain interactions
+- Component composition over inheritance
+```
+
+---
+
+## 📝 Code Style Guidelines
+
+### Solidity
+```solidity
+// File structure
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+// Naming conventions
+contract SupplyChain {
+    // 1. State variables (uppercase for constants)
+    address public admin;
+    uint256 public nextTokenId;
+    
+    // 2. Enums
+    enum UserStatus { Pending, Approved, Rejected, Canceled }
+    
+    // 3. Structs
+    struct Token { /* ... */ }
+    
+    // 4. Events
+    event TokenCreated(uint256 indexed tokenId, address indexed creator);
+    
+    // 5. Modifiers
+    modifier onlyAdmin() { /* ... */ }
+    
+    // 6. Constructor
+    constructor() { /* ... */ }
+    
+    // 7. Public/External functions
+    function requestUserRole(string memory role) public { /* ... */ }
+    
+    // 8. Internal/Private functions
+    function _validateRole(string memory role) internal pure { /* ... */ }
+}
+
+// Comments: Use // for single line, /** */ for function documentation
+// Indentation: 4 spaces
+// Line length: max 120 characters
+```
+
+### TypeScript/React
+```typescript
+// File naming: camelCase for files, PascalCase for components
+// Component structure:
+'use client' // Only if needed
+
+import { useState } from 'react'
+import type { FC } from 'react'
+
+interface ComponentProps {
+  // Props definition
+}
+
+export const Component: FC<ComponentProps> = ({ prop }) => {
+  // 1. Hooks
+  const [state, setState] = useState()
+  
+  // 2. Event handlers
+  const handleClick = () => { /* ... */ }
+  
+  // 3. JSX return
+  return <div>Content</div>
+}
+
+// Naming conventions:
+// - Components: PascalCase (UserCard, TokenList)
+// - Functions: camelCase (handleSubmit, fetchTokens)
+// - Constants: UPPER_SNAKE_CASE (CONTRACT_ADDRESS)
+// - Interfaces: PascalCase with I prefix optional (UserData or IUserData)
+```
+
+---
+
+## 🔧 Development Workflow
+
+### Git Commit Strategy
+```bash
+# Format: <type>: <description>
+
+# Types:
+feat: New feature
+fix: Bug fix
+test: Add or update tests
+refactor: Code refactoring
+docs: Documentation changes
+style: Code style changes (formatting)
+chore: Build process or auxiliary tool changes
+
+# Examples:
+git commit -m "feat: implement SupplyChain contract structs and enums"
+git commit -m "test: add user registration tests"
+git commit -m "feat: create Web3Provider context with localStorage"
+```
+
+### Testing Strategy
+```bash
+# Smart Contracts - Run tests after every change
+cd sc
+forge test                     # All tests
+forge test -vv                 # Verbose
+forge test --match-test testName  # Specific test
+forge coverage                 # Coverage report
+
+# Frontend - Build to check types
+cd web
+npm run build                  # Check for type errors
+npm run lint                   # Lint check
+```
+
+---
+
+## 🚨 Critical Rules
+
+### Smart Contract Rules
+1. **Always emit events** for state changes
+2. **Use require() with descriptive messages** for validations
+3. **Check msg.sender permissions** before state changes
+4. **Validate input parameters** (non-zero addresses, valid strings, etc.)
+5. **Test all edge cases** before moving forward
+6. **No floating point math** - use integer arithmetic only
+7. **Storage optimization** - use appropriate uint sizes (but uint256 is gas-efficient)
+
+### Frontend Rules
+1. **Handle MetaMask errors** gracefully with try/catch
+2. **Convert BigInt** to string/number for display/JSON
+3. **Check window.ethereum** before using Web3
+4. **Persist wallet state** in localStorage
+5. **Handle account/network changes** from MetaMask
+6. **Loading states** for all async operations
+7. **Error boundaries** for component errors
+8. **Use Next.js 15+ params** as Promises with `use()` hook
+
+### Web3 Integration Rules
+```typescript
+// Always handle BigInt serialization
+const data = {
+  tokenId: token.id.toString(), // Convert BigInt to string
+  amount: Number(token.amount)   // or to Number if safe
+}
+
+// Always check MetaMask connection
+if (typeof window.ethereum === 'undefined') {
+  throw new Error('MetaMask not installed')
+}
+
+// Always handle transaction errors
+try {
+  const tx = await contract.functionName()
+  await tx.wait() // Wait for confirmation
+} catch (error) {
+  console.error('Transaction failed:', error)
+  // Show user-friendly error
+}
+```
+
+---
+
+## 📂 File Organization
+
+### Smart Contracts (`sc/`)
+```
+sc/
+├── src/
+│   └── SupplyChain.sol          # Main contract
+├── script/
+│   └── Deploy.s.sol             # Deployment script
+├── test/
+│   └── SupplyChain.t.sol        # Test suite
+└── foundry.toml                 # Foundry config
+```
+
+### Frontend (`web/src/`)
+```
+web/src/
+├── app/                         # Next.js pages (App Router)
+│   ├── page.tsx                 # Landing/Auth
+│   ├── layout.tsx               # Root layout with providers
+│   ├── dashboard/
+│   ├── tokens/
+│   ├── transfers/
+│   ├── admin/
+│   └── profile/
+├── components/
+│   ├── ui/                      # Base UI components (shadcn)
+│   ├── Header.tsx               # Navigation
+│   ├── TokenCard.tsx            # Business components
+│   └── ...
+├── contexts/
+│   └── Web3Context.tsx          # Global Web3 state
+├── hooks/
+│   ├── useWallet.ts             # Wallet connection
+│   └── useContract.ts           # Contract interactions
+├── lib/
+│   ├── web3.ts                  # Web3 service
+│   └── utils.ts                 # Utility functions
+└── contracts/
+    ├── abi.ts                   # Contract ABI
+    └── config.ts                # Contract addresses
+```
+
+---
+
+## 🎨 UI/UX Guidelines
+
+### Design Principles
+- **Mobile-first responsive design**
+- **Clear visual feedback** for all actions
+- **Loading states** for async operations
+- **Error messages** user-friendly and actionable
+- **Consistent spacing** using Tailwind spacing scale
+- **Accessible** - use semantic HTML and ARIA labels
+
+### Color Scheme (Tailwind)
+```typescript
+// Use these Tailwind classes consistently
+Primary: bg-blue-600, hover:bg-blue-700
+Success: bg-green-600, text-green-700
+Error: bg-red-600, text-red-700
+Warning: bg-yellow-600, text-yellow-700
+Neutral: bg-gray-100, text-gray-900
+```
+
+### Component Patterns
+```tsx
+// Card component pattern
+<div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+  <h3 className="text-xl font-bold mb-4">Title</h3>
+  <div className="space-y-2">Content</div>
+</div>
+
+// Button pattern
+<button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+  Action
+</button>
+```
+
+---
+
+## ⚡ Performance Guidelines
+
+### Smart Contracts
+- Batch reads when possible
+- Use `view`/`pure` functions for read-only operations
+- Minimize storage writes (most expensive operation)
+- Use events instead of storing data when possible
+
+### Frontend
+- Use React.memo for expensive components
+- Lazy load routes with dynamic imports
+- Debounce user inputs
+- Cache contract calls when appropriate
+- Use Web3 Provider's built-in caching
+
+---
+
+## 🔒 Security Guidelines
+
+### Smart Contracts
+- Use `require()` for input validation
+- Check for zero addresses
+- Validate string inputs (non-empty)
+- Use `msg.sender` for access control
+- Emit events for audit trail
+- Test revert conditions
+
+### Frontend
+- Never expose private keys
+- Validate user inputs
+- Sanitize displayed data
+- Use environment variables for sensitive config
+- Implement proper error handling
+- Don't trust client-side validation alone
+
+---
+
+## 📚 Documentation Standards
+
+### Code Comments
+```solidity
+// Solidity - Document all public functions
+/**
+ * @notice Transfers tokens to another user
+ * @param to Recipient address
+ * @param tokenId ID of the token to transfer
+ * @param amount Amount to transfer
+ */
+function transfer(address to, uint tokenId, uint amount) public { }
+```
+
+```typescript
+// TypeScript - Comment complex logic
+/**
+ * Connects to MetaMask wallet and retrieves user account
+ * @returns {Promise<string>} Connected wallet address
+ * @throws {Error} If MetaMask is not installed
+ */
+async function connectWallet(): Promise<string> { }
+```
+
+---
+
+## 🧪 Testing Standards
+
+### Smart Contract Tests
+```solidity
+// Test naming: test<FunctionName><Scenario>
+function testTransferFromProducerToFactory() public {
+    // Arrange: Setup test data
+    // Act: Execute function
+    // Assert: Verify results
+}
+
+// Test reverts: test<FunctionName>Reverts<Reason>
+function testTransferRevertsInsufficientBalance() public {
+    vm.expectRevert("Insufficient balance");
+    // ... test code
+}
+```
+
+### Frontend Testing
+```typescript
+// Manual testing checklist for each feature:
+// ✅ Happy path works
+// ✅ Error cases handled
+// ✅ Loading states shown
+// ✅ Edge cases covered
+// ✅ Responsive on mobile
+```
+
+---
+
+## 🚀 Deployment Checklist
+
+### Before Deployment
+- [ ] All tests passing (`forge test`)
+- [ ] Frontend builds without errors (`npm run build`)
+- [ ] Contract deployed to Anvil
+- [ ] Contract address updated in frontend config
+- [ ] MetaMask configured with Anvil network
+- [ ] Test accounts imported to MetaMask
+- [ ] Environment variables configured
+
+---
+
+## 💡 Best Practices Summary
+
+### DO ✅
+- Write tests first (TDD when possible)
+- Commit frequently with clear messages
+- Use TypeScript strictly (no `any` types)
+- Handle all error cases
+- Document complex logic
+- Follow naming conventions
+- Use provided design patterns
+
+### DON'T ❌
+- Skip tests
+- Commit broken code
+- Use `any` type in TypeScript
+- Ignore linter warnings
+- Hard-code addresses/keys
+- Modify `.gitignore` files
+- Skip error handling
+- Mix server/client components without marking
+
+---
+
+## 🔗 Quick Reference
+
+### Common Commands
+```bash
+# Smart Contracts
+forge build                    # Compile
+forge test                     # Test
+forge test -vvv               # Verbose test
+forge script script/Deploy.s.sol --broadcast  # Deploy
+
+# Frontend
+npm run dev                    # Start dev server
+npm run build                  # Build for production
+npm run lint                   # Lint code
+
+# Git
+git add .                      # Stage changes
+git commit -m "feat: ..."     # Commit
+git push origin main          # Push
+
+# Anvil
+anvil                         # Start local blockchain
+```
+
+### Environment Setup
+```bash
+# Anvil Local Network
+RPC URL: http://localhost:8545
+Chain ID: 31337
+Currency: ETH
+
+# Test Accounts (Anvil default)
+Admin: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+Producer: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+Factory: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+Retailer: 0x90F79bf6EB2c4f870365E785982E1f101E93b906
+Consumer: 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65
+```
+
+---
+
+## 📖 Remember
+
+This project is for **learning**. Focus on:
+1. **Understanding** each concept before moving forward
+2. **Testing** thoroughly at each step
+3. **Committing** working code frequently
+4. **Documenting** your learning journey
+5. **Asking questions** when stuck
+
+**You've got this! 🚀**
+
