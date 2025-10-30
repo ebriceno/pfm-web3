@@ -6,9 +6,9 @@
 export const CONTRACT_CONFIG = {
   /**
    * Contract address on Anvil local network
-   * TODO: Update this after deploying with `forge script`
+   * Updated after redeployment
    */
-  address: '0x5FbDB2315678afecb367f032d93F642f64180aa3', // Default first deployment address on Anvil
+  address: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
   
   /**
    * Admin address (first account from Anvil)
