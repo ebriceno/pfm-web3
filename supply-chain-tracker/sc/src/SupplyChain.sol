@@ -303,10 +303,115 @@ contract SupplyChain {
     }
     
     // ============================================
+    // TOKEN MANAGEMENT FUNCTIONS
+    // ============================================
+    
+    /**
+     * @notice Creates a new token
+     * @param name Token name
+     * @param totalSupply Total supply to create
+     * @param features JSON string with token metadata
+     * @param parentId Parent token ID (0 for raw materials)
+     */
+    function createToken(
+        string memory name,
+        uint256 totalSupply,
+        string memory features,
+        uint256 parentId
+    ) public onlyApprovedUser {
+        require(bytes(name).length > 0, "Name cannot be empty");
+        require(totalSupply > 0, "Supply must be greater than 0");
+        
+        uint256 userId = addressToUserId[msg.sender];
+        string memory userRole = users[userId].role;
+        
+        // Producer: parentId must be 0 (raw materials)
+        if (_compareStrings(userRole, "Producer")) {
+            require(parentId == 0, "Producer cannot have parent token");
+        }
+        // Factory/Retailer: must have valid parent token and own some of it
+        else if (_compareStrings(userRole, "Factory") || _compareStrings(userRole, "Retailer")) {
+            require(parentId > 0 && parentId < nextTokenId, "Invalid parent token");
+            require(tokens[parentId].balance[msg.sender] > 0, "Must own parent token");
+        }
+        // Consumer: cannot create tokens
+        else {
+            revert("Consumer cannot create tokens");
+        }
+        
+        uint256 tokenId = nextTokenId++;
+        Token storage newToken = tokens[tokenId];
+        newToken.id = tokenId;
+        newToken.creator = msg.sender;
+        newToken.name = name;
+        newToken.totalSupply = totalSupply;
+        newToken.features = features;
+        newToken.parentId = parentId;
+        newToken.dateCreated = block.timestamp;
+        newToken.balance[msg.sender] = totalSupply;
+        
+        userTokenIds[msg.sender].push(tokenId);
+        
+        emit TokenCreated(tokenId, msg.sender, name, totalSupply);
+    }
+    
+    /**
+     * @notice Gets token information
+     * @param tokenId ID of the token
+     * @return id Token ID
+     * @return creator Creator address
+     * @return name Token name
+     * @return totalSupply Total supply
+     * @return features JSON metadata
+     * @return parentId Parent token ID
+     * @return dateCreated Creation timestamp
+     */
+    function getToken(uint256 tokenId) public view returns (
+        uint256 id,
+        address creator,
+        string memory name,
+        uint256 totalSupply,
+        string memory features,
+        uint256 parentId,
+        uint256 dateCreated
+    ) {
+        require(tokenId > 0 && tokenId < nextTokenId, "Invalid token ID");
+        Token storage token = tokens[tokenId];
+        return (
+            token.id,
+            token.creator,
+            token.name,
+            token.totalSupply,
+            token.features,
+            token.parentId,
+            token.dateCreated
+        );
+    }
+    
+    /**
+     * @notice Gets token balance for a specific address
+     * @param tokenId ID of the token
+     * @param userAddress Address to check balance
+     * @return Balance of the token
+     */
+    function getTokenBalance(uint256 tokenId, address userAddress) public view returns (uint256) {
+        require(tokenId > 0 && tokenId < nextTokenId, "Invalid token ID");
+        return tokens[tokenId].balance[userAddress];
+    }
+    
+    /**
+     * @notice Gets all token IDs owned by a user (with balance > 0)
+     * @param userAddress Address of the user
+     * @return Array of token IDs
+     */
+    function getUserTokens(address userAddress) public view returns (uint256[] memory) {
+        return userTokenIds[userAddress];
+    }
+    
+    // ============================================
     // PLACEHOLDER SECTIONS FOR FUTURE FUNCTIONS
     // ============================================
     
-    // Token Management Functions will be added in Step 1.4
     // Transfer Management Functions will be added in Step 1.6
 }
 
