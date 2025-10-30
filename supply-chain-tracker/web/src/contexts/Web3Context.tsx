@@ -60,20 +60,21 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       const adminStatus = await web3Service.isAdmin(address);
       setIsAdmin(adminStatus);
 
-      // Try to get user info (admin might not be registered as a user)
+      // If admin, skip getUserInfo (admin is not registered as a user)
+      if (adminStatus) {
+        console.log('Admin account - no user info needed');
+        setUserInfo(null);
+        return;
+      }
+
+      // For non-admin, try to get user info
       try {
         const info = await web3Service.getUserInfo(address);
         setUserInfo(info);
       } catch {
-        // If admin, it's OK to not have user info
-        if (adminStatus) {
-          console.log('Admin account - no user info needed');
-          setUserInfo(null);
-        } else {
-          // Non-admin should have user info or be able to register
-          console.log('User not registered yet');
-          setUserInfo(null);
-        }
+        // Non-admin not registered yet
+        console.log('User not registered yet');
+        setUserInfo(null);
       }
     } catch (err: unknown) {
       console.error('Failed to load user info:', err);
