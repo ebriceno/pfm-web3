@@ -150,7 +150,12 @@ export default function Home() {
  * Authenticated View - Handles different user states
  */
 function AuthenticatedView() {
-  const { userInfo } = useWeb3();
+  const { userInfo, isAdmin } = useWeb3();
+
+  // Admin - redirect to admin dashboard
+  if (isAdmin && !userInfo) {
+    return <AdminWelcome />;
+  }
 
   // Not registered - show registration form
   if (!userInfo) {
@@ -525,6 +530,78 @@ function RejectedStatus() {
                 Please contact the administrator for more information about why your registration was rejected.
               </p>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Admin Welcome Screen
+ */
+function AdminWelcome() {
+  const [redirecting, setRedirecting] = useState(false);
+
+  // Auto-redirect after 3 seconds
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setRedirecting(true);
+      window.location.href = '/admin';
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="container mx-auto px-4 py-16">
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mb-4 flex justify-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                <span className="text-3xl">👑</span>
+              </div>
+            </div>
+            <CardTitle className="text-2xl">Welcome, Administrator!</CardTitle>
+            <CardDescription>
+              You have full administrative access to the supply chain system
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-800">
+                <strong>As Admin, you can:</strong>
+              </p>
+              <ul className="mt-2 space-y-1 text-sm text-red-700 list-disc list-inside">
+                <li>Approve or reject user registrations</li>
+                <li>Manage all users in the system</li>
+                <li>View system statistics and analytics</li>
+                <li>Monitor all tokens and transfers</li>
+                <li>Revoke user access when needed</li>
+              </ul>
+            </div>
+
+            <div className="text-center">
+              {redirecting ? (
+                <div className="flex items-center justify-center gap-2 text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Redirecting to admin panel...</span>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Redirecting to admin panel in a few seconds...
+                </p>
+              )}
+            </div>
+
+            <Button
+              onClick={() => window.location.href = '/admin'}
+              className="w-full bg-red-600 hover:bg-red-700"
+              size="lg"
+            >
+              Go to Admin Panel Now
+            </Button>
           </CardContent>
         </Card>
       </div>

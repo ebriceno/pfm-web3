@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { web3Service } from '@/lib/web3';
 import { UserStatus } from '@/contracts/config';
 
@@ -56,16 +56,26 @@ export function Web3Provider({ children }: { children: ReactNode }) {
    */
   const loadUserInfo = async (address: string) => {
     try {
-      const info = await web3Service.getUserInfo(address);
-      setUserInfo(info);
+      // First check if address is admin
+      const adminStatus = await web3Service.isAdmin(address);
+      setIsAdmin(adminStatus);
 
-      if (info) {
-        const adminStatus = await web3Service.isAdmin(address);
-        setIsAdmin(adminStatus);
-      } else {
-        setIsAdmin(false);
+      // Try to get user info (admin might not be registered as a user)
+      try {
+        const info = await web3Service.getUserInfo(address);
+        setUserInfo(info);
+      } catch {
+        // If admin, it's OK to not have user info
+        if (adminStatus) {
+          console.log('Admin account - no user info needed');
+          setUserInfo(null);
+        } else {
+          // Non-admin should have user info or be able to register
+          console.log('User not registered yet');
+          setUserInfo(null);
+        }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load user info:', err);
       setUserInfo(null);
       setIsAdmin(false);
@@ -91,7 +101,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         // Not on Anvil, try to switch
         try {
           await web3Service.switchToAnvilNetwork();
-        } catch (switchError: any) {
+        } catch {
           throw new Error('Please switch to Anvil Local network (Chain ID: 31337)');
         }
       }
@@ -103,9 +113,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
       // Load user info
       await loadUserInfo(address);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to connect wallet:', err);
-      setError(err.message || 'Failed to connect wallet');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to connect wallet';
+      setError(errorMessage);
       throw err;
     } finally {
       setIsLoading(false);
@@ -141,7 +152,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   /**
    * Handle account change from MetaMask
    */
-  const handleAccountsChanged = async (accounts: string[]) => {
+  const handleAccountsChanged = useCallback(async (accounts: string[]) => {
     if (accounts.length === 0) {
       // User disconnected
       disconnectWallet();
@@ -152,12 +163,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       localStorage.setItem('connectedAccount', newAccount);
       await loadUserInfo(newAccount);
     }
-  };
+  }, [account]);
 
   /**
    * Handle chain change from MetaMask
    */
-  const handleChainChanged = (chainId: string) => {
+  const handleChainChanged = useCallback((chainId: string) => {
     // Reload page on chain change (recommended by MetaMask)
     if (chainId !== '0x7a69') {
       setError('Wrong network. Please switch to Anvil Local (Chain ID: 31337)');
@@ -165,7 +176,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       setError(null);
       window.location.reload();
     }
-  };
+  }, []);
 
   /**
    * Initialize - Load from localStorage on mount
@@ -235,7 +246,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         window.ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, [account]); // Re-run when account changes
+  }, [account, handleAccountsChanged, handleChainChanged]); // Re-run when account or handlers change
 
   const value: Web3ContextType = {
     // Connection state
