@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Check, X, RefreshCcw, ArrowLeft } from 'lucide-react';
 import { truncateAddress, getRoleBadgeVariant, getStatusBadgeVariant } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface User {
   id: number;
@@ -74,12 +75,20 @@ export default function AdminUsersPage() {
     }
   }, [users, filter]);
 
+  const { toast } = useToast();
+
   // Approve user
   const handleApprove = async (user: User) => {
     try {
       setProcessingUserId(user.id);
       const { web3Service } = await import('@/lib/web3');
       await web3Service.changeUserStatus(user.userAddress, 1); // 1 = Approved
+      
+      toast({
+        title: 'User Approved',
+        description: `${truncateAddress(user.userAddress)} has been approved as ${user.role}`,
+        variant: 'success',
+      });
       
       // Wait a moment for transaction to be mined
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -89,7 +98,11 @@ export default function AdminUsersPage() {
     } catch (error: unknown) {
       console.error('Error approving user:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to approve user';
-      alert(errorMessage);
+      toast({
+        title: 'Approval Failed',
+        description: errorMessage,
+        variant: 'danger',
+      });
     } finally {
       setProcessingUserId(null);
     }
@@ -102,6 +115,12 @@ export default function AdminUsersPage() {
       const { web3Service } = await import('@/lib/web3');
       await web3Service.changeUserStatus(user.userAddress, 2); // 2 = Rejected
       
+      toast({
+        title: 'User Rejected',
+        description: `${truncateAddress(user.userAddress)} has been rejected`,
+        variant: 'warning',
+      });
+      
       // Wait a moment for transaction to be mined
       await new Promise(resolve => setTimeout(resolve, 1000));
       
@@ -110,7 +129,11 @@ export default function AdminUsersPage() {
     } catch (error: unknown) {
       console.error('Error rejecting user:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to reject user';
-      alert(errorMessage);
+      toast({
+        title: 'Rejection Failed',
+        description: errorMessage,
+        variant: 'danger',
+      });
     } finally {
       setProcessingUserId(null);
     }

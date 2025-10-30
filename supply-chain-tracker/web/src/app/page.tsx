@@ -5,6 +5,7 @@ import { useWeb3 } from '@/contexts/Web3Context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Home() {
   const { isConnected, isLoading, connectWallet } = useWeb3();
@@ -197,6 +198,7 @@ function AuthenticatedView() {
  */
 function RegistrationForm() {
   const { refreshUserInfo } = useWeb3();
+  const { toast } = useToast();
   const [selectedRole, setSelectedRole] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -205,6 +207,11 @@ function RegistrationForm() {
     e.preventDefault();
     if (!selectedRole) {
       setError('Please select a role');
+      toast({
+        title: 'Validation Error',
+        description: 'Please select a role to continue',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -215,6 +222,12 @@ function RegistrationForm() {
       const { web3Service } = await import('@/lib/web3');
       await web3Service.requestUserRole(selectedRole);
       
+      toast({
+        title: 'Registration Submitted!',
+        description: `Your request to register as ${selectedRole} has been submitted. Waiting for admin approval.`,
+        variant: 'success',
+      });
+      
       // Wait a moment for transaction to be mined
       await new Promise(resolve => setTimeout(resolve, 1000));
       
@@ -224,6 +237,11 @@ function RegistrationForm() {
       console.error('Registration error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to register. Please try again.';
       setError(errorMessage);
+      toast({
+        title: 'Registration Failed',
+        description: errorMessage,
+        variant: 'danger',
+      });
     } finally {
       setIsSubmitting(false);
     }
