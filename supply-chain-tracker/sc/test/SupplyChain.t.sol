@@ -242,10 +242,265 @@ contract SupplyChainTest is Test {
     }
     
     // ============================================
+    // TOKEN CREATION TESTS
+    // ============================================
+    
+    function testCreateTokenByProducer() public {
+        // Register and approve producer
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        // Create token with parentId = 0 (raw material)
+        vm.prank(producer);
+        vm.expectEmit(true, true, false, true);
+        emit TokenCreated(1, producer, "Organic Wheat", 1000);
+        supplyChain.createToken("Organic Wheat", 1000, '{"origin": "Spain"}', 0);
+        
+        // Verify token created
+        (uint256 id, address creator, string memory name, uint256 totalSupply, 
+         string memory features, uint256 parentId, uint256 dateCreated) = supplyChain.getToken(1);
+        
+        assertEq(id, 1);
+        assertEq(creator, producer);
+        assertEq(name, "Organic Wheat");
+        assertEq(totalSupply, 1000);
+        assertEq(features, '{"origin": "Spain"}');
+        assertEq(parentId, 0);
+        assertGt(dateCreated, 0);
+        
+        // Verify balance
+        assertEq(supplyChain.getTokenBalance(1, producer), 1000);
+    }
+    
+    function testCreateTokenByFactory() public {
+        // Note: This test validates that Factory CAN create tokens with parent
+        // The full flow with actual token transfer will be tested in Step 1.7
+        // For now, we test that Factory must have a parent token ID
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        // Factory tries to create without parent - should fail
+        vm.prank(factory);
+        vm.expectRevert("Invalid parent token");
+        supplyChain.createToken("Wheat Flour", 500, '{"process": "milled"}', 0);
+        
+        // This validates Factory role requires parentId > 0
+        // Full integration test with transfers will be in Step 1.7
+    }
+    
+    function testCreateTokenByRetailer() public {
+        // Note: This test validates that Retailer CAN create tokens with parent
+        // The full flow with actual token transfer will be tested in Step 1.7
+        
+        vm.prank(retailer);
+        supplyChain.requestUserRole("Retailer");
+        supplyChain.changeStatusUser(retailer, SupplyChain.UserStatus.Approved);
+        
+        // Retailer tries to create without parent - should fail
+        vm.prank(retailer);
+        vm.expectRevert("Invalid parent token");
+        supplyChain.createToken("Flour Pack 1kg", 50, '{"package": "retail"}', 0);
+        
+        // This validates Retailer role requires parentId > 0
+        // Full integration test with transfers will be in Step 1.7
+    }
+    
+    function testTokenWithParentId() public {
+        // Create parent token
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Raw Material", 1000, '{}', 0);
+        
+        // Verify parent token has parentId = 0
+        (, , , , , uint256 parentId, ) = supplyChain.getToken(1);
+        assertEq(parentId, 0);
+        
+        // Full parent-child relationship will be tested in Step 1.7
+        // after transfer functions are implemented
+    }
+    
+    function testTokenMetadata() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        string memory metadata = '{"origin": "Spain", "organic": true, "certifications": ["EU-BIO"]}';
+        vm.prank(producer);
+        supplyChain.createToken("Premium Wheat", 1000, metadata, 0);
+        
+        (, , , , string memory features, , ) = supplyChain.getToken(1);
+        assertEq(features, metadata);
+    }
+    
+    function testTokenBalance() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 5000, '{}', 0);
+        
+        // Creator should have full supply
+        assertEq(supplyChain.getTokenBalance(1, producer), 5000);
+        
+        // Others should have 0
+        assertEq(supplyChain.getTokenBalance(1, factory), 0);
+        assertEq(supplyChain.getTokenBalance(1, retailer), 0);
+    }
+    
+    function testGetToken() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.createToken("Test Token", 1234, '{"test": true}', 0);
+        
+        (uint256 id, address creator, string memory name, uint256 totalSupply,
+         string memory features, uint256 parentId, uint256 dateCreated) = supplyChain.getToken(1);
+        
+        assertEq(id, 1);
+        assertEq(creator, producer);
+        assertEq(name, "Test Token");
+        assertEq(totalSupply, 1234);
+        assertEq(features, '{"test": true}');
+        assertEq(parentId, 0);
+        assertGt(dateCreated, 0);
+    }
+    
+    function testGetUserTokens() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        // Create multiple tokens
+        vm.prank(producer);
+        supplyChain.createToken("Token 1", 100, '{}', 0);
+        vm.prank(producer);
+        supplyChain.createToken("Token 2", 200, '{}', 0);
+        vm.prank(producer);
+        supplyChain.createToken("Token 3", 300, '{}', 0);
+        
+        // Get user tokens
+        uint256[] memory tokens = supplyChain.getUserTokens(producer);
+        assertEq(tokens.length, 3);
+        assertEq(tokens[0], 1);
+        assertEq(tokens[1], 2);
+        assertEq(tokens[2], 3);
+    }
+    
+    function testUnapprovedUserCannotCreateToken() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        // Don't approve
+        
+        vm.prank(producer);
+        vm.expectRevert("User not approved");
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+    }
+    
+    function testProducerCannotHaveParent() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        // Producer tries to create token with parent
+        vm.prank(producer);
+        vm.expectRevert("Producer cannot have parent token");
+        supplyChain.createToken("Invalid", 100, '{}', 1);
+    }
+    
+    function testFactoryMustHaveParent() public {
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        // Factory tries to create token without parent
+        vm.prank(factory);
+        vm.expectRevert("Invalid parent token");
+        supplyChain.createToken("Invalid", 100, '{}', 0);
+    }
+    
+    function testRetailerMustHaveParent() public {
+        vm.prank(retailer);
+        supplyChain.requestUserRole("Retailer");
+        supplyChain.changeStatusUser(retailer, SupplyChain.UserStatus.Approved);
+        
+        // Retailer tries to create token without parent
+        vm.prank(retailer);
+        vm.expectRevert("Invalid parent token");
+        supplyChain.createToken("Invalid", 100, '{}', 0);
+    }
+    
+    function testConsumerCannotCreateToken() public {
+        vm.prank(consumer);
+        supplyChain.requestUserRole("Consumer");
+        supplyChain.changeStatusUser(consumer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(consumer);
+        vm.expectRevert("Consumer cannot create tokens");
+        supplyChain.createToken("Invalid", 100, '{}', 0);
+    }
+    
+    function testFactoryMustOwnParentToken() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        // Factory tries to use parent token it doesn't own
+        vm.prank(factory);
+        vm.expectRevert("Must own parent token");
+        supplyChain.createToken("Flour", 100, '{}', 1);
+    }
+    
+    function testCreateTokenEmptyName() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        vm.expectRevert("Name cannot be empty");
+        supplyChain.createToken("", 1000, '{}', 0);
+    }
+    
+    function testCreateTokenZeroSupply() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        vm.expectRevert("Supply must be greater than 0");
+        supplyChain.createToken("Wheat", 0, '{}', 0);
+    }
+    
+    function testGetTokenInvalidId() public {
+        vm.expectRevert("Invalid token ID");
+        supplyChain.getToken(999);
+        
+        vm.expectRevert("Invalid token ID");
+        supplyChain.getToken(0);
+    }
+    
+    function testGetTokenBalanceInvalidId() public {
+        vm.expectRevert("Invalid token ID");
+        supplyChain.getTokenBalance(999, producer);
+    }
+    
+    // ============================================
     // PLACEHOLDER FOR FUTURE TESTS
     // ============================================
     
-    // Token creation tests will be added in Step 1.5
     // Transfer tests will be added in Step 1.7
 }
 
