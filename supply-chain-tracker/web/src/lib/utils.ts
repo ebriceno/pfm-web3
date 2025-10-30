@@ -116,3 +116,30 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Get role badge variant for Badge component
+ */
+export function getRoleBadgeVariant(role: string): 'default' | 'success' | 'warning' | 'danger' {
+  const variants: Record<string, 'default' | 'success' | 'warning' | 'danger'> = {
+    Producer: 'default',
+    Factory: 'warning',
+    Retailer: 'warning',
+    Consumer: 'success',
+    Admin: 'danger',
+  };
+  return variants[role] || 'default';
+}
+
+/**
+ * Get status badge variant for Badge component
+ */
+export function getStatusBadgeVariant(status: number): 'default' | 'success' | 'warning' | 'danger' {
+  const variants = [
+    'warning' as const,  // Pending
+    'success' as const,  // Approved/Accepted
+    'danger' as const,   // Rejected
+    'default' as const,  // Canceled
+  ];
+  return variants[status] || 'default';
+}
+

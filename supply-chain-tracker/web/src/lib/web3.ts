@@ -169,6 +169,50 @@ class Web3Service {
     return await this.contract!.isAdmin(address);
   }
 
+  /**
+   * Get all users (admin only)
+   */
+  async getAllUsers() {
+    await this.ensureInitialized();
+    const nextUserId = await this.contract!.nextUserId();
+    const totalUsers = Number(nextUserId) - 1; // nextUserId starts at 1
+    
+    const users = [];
+    for (let i = 1; i <= totalUsers; i++) {
+      try {
+        const user = await this.contract!.users(i);
+        users.push({
+          id: Number(user.id),
+          userAddress: user.userAddress,
+          role: user.role,
+          status: Number(user.status),
+        });
+      } catch (error) {
+        console.error(`Error fetching user ${i}:`, error);
+      }
+    }
+    
+    return users;
+  }
+
+  /**
+   * Get contract statistics
+   */
+  async getStatistics() {
+    await this.ensureInitialized();
+    const [nextUserId, nextTokenId, nextTransferId] = await Promise.all([
+      this.contract!.nextUserId(),
+      this.contract!.nextTokenId(),
+      this.contract!.nextTransferId(),
+    ]);
+
+    return {
+      totalUsers: Number(nextUserId) - 1,
+      totalTokens: Number(nextTokenId) - 1,
+      totalTransfers: Number(nextTransferId) - 1,
+    };
+  }
+
   // ============================================
   // TOKEN MANAGEMENT
   // ============================================
