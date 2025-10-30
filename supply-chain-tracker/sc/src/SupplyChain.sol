@@ -409,9 +409,119 @@ contract SupplyChain {
     }
     
     // ============================================
-    // PLACEHOLDER SECTIONS FOR FUTURE FUNCTIONS
+    // TRANSFER MANAGEMENT FUNCTIONS
     // ============================================
     
-    // Transfer Management Functions will be added in Step 1.6
+    /**
+     * @notice Initiates a transfer of tokens
+     * @param to Recipient address
+     * @param tokenId Token to transfer
+     * @param amount Amount to transfer
+     */
+    function transfer(address to, uint256 tokenId, uint256 amount) public onlyApprovedUser {
+        require(to != address(0), "Invalid recipient");
+        require(to != msg.sender, "Cannot transfer to yourself");
+        require(tokenId > 0 && tokenId < nextTokenId, "Invalid token ID");
+        require(amount > 0, "Amount must be greater than 0");
+        require(tokens[tokenId].balance[msg.sender] >= amount, "Insufficient balance");
+        
+        uint256 fromUserId = addressToUserId[msg.sender];
+        uint256 toUserId = addressToUserId[to];
+        require(toUserId != 0, "Recipient not registered");
+        require(users[toUserId].status == UserStatus.Approved, "Recipient not approved");
+        
+        // Validate role-based transfer rules
+        string memory fromRole = users[fromUserId].role;
+        string memory toRole = users[toUserId].role;
+        require(_isValidTransfer(fromRole, toRole), "Invalid role transfer");
+        
+        // Consumer cannot transfer (end of chain)
+        require(!_compareStrings(fromRole, "Consumer"), "Consumer cannot transfer");
+        
+        uint256 transferId = nextTransferId++;
+        Transfer storage newTransfer = transfers[transferId];
+        newTransfer.id = transferId;
+        newTransfer.from = msg.sender;
+        newTransfer.to = to;
+        newTransfer.tokenId = tokenId;
+        newTransfer.dateCreated = block.timestamp;
+        newTransfer.amount = amount;
+        newTransfer.status = TransferStatus.Pending;
+        
+        userTransferIds[msg.sender].push(transferId);
+        userTransferIds[to].push(transferId);
+        
+        emit TransferRequested(transferId, msg.sender, to, tokenId, amount);
+    }
+    
+    /**
+     * @notice Accepts a pending transfer
+     * @param transferId ID of the transfer
+     */
+    function acceptTransfer(uint256 transferId) public onlyApprovedUser {
+        require(transferId > 0 && transferId < nextTransferId, "Invalid transfer ID");
+        Transfer storage txn = transfers[transferId];
+        
+        require(txn.to == msg.sender, "Only recipient can accept");
+        require(txn.status == TransferStatus.Pending, "Transfer not pending");
+        require(tokens[txn.tokenId].balance[txn.from] >= txn.amount, "Insufficient balance");
+        
+        // Execute transfer
+        tokens[txn.tokenId].balance[txn.from] -= txn.amount;
+        tokens[txn.tokenId].balance[txn.to] += txn.amount;
+        
+        // Update transfer status
+        txn.status = TransferStatus.Accepted;
+        
+        // Add token to recipient's list if first time
+        bool hasToken = false;
+        uint256[] storage recipientTokens = userTokenIds[txn.to];
+        for (uint i = 0; i < recipientTokens.length; i++) {
+            if (recipientTokens[i] == txn.tokenId) {
+                hasToken = true;
+                break;
+            }
+        }
+        if (!hasToken) {
+            userTokenIds[txn.to].push(txn.tokenId);
+        }
+        
+        emit TransferAccepted(transferId);
+    }
+    
+    /**
+     * @notice Rejects a pending transfer
+     * @param transferId ID of the transfer
+     */
+    function rejectTransfer(uint256 transferId) public onlyApprovedUser {
+        require(transferId > 0 && transferId < nextTransferId, "Invalid transfer ID");
+        Transfer storage txn = transfers[transferId];
+        
+        require(txn.to == msg.sender, "Only recipient can reject");
+        require(txn.status == TransferStatus.Pending, "Transfer not pending");
+        
+        txn.status = TransferStatus.Rejected;
+        
+        emit TransferRejected(transferId);
+    }
+    
+    /**
+     * @notice Gets transfer information
+     * @param transferId ID of the transfer
+     * @return Transfer struct
+     */
+    function getTransfer(uint256 transferId) public view returns (Transfer memory) {
+        require(transferId > 0 && transferId < nextTransferId, "Invalid transfer ID");
+        return transfers[transferId];
+    }
+    
+    /**
+     * @notice Gets all transfer IDs involving a user
+     * @param userAddress Address of the user
+     * @return Array of transfer IDs
+     */
+    function getUserTransfers(address userAddress) public view returns (uint256[] memory) {
+        return userTransferIds[userAddress];
+    }
 }
 
