@@ -157,23 +157,11 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       // User disconnected
       disconnectWallet();
     } else if (accounts[0] !== account) {
-      // Account changed - clear state first
-      const newAccount = accounts[0];
-      
-      // Clear old state immediately
-      setUserInfo(null);
-      setIsAdmin(false);
-      setError(null);
-      
-      // Update account
-      setAccount(newAccount);
-      localStorage.setItem('connectedAccount', newAccount);
-      
-      // Small delay to ensure state is cleared
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Load new user info
-      await loadUserInfo(newAccount);
+      // Account changed - reload page for clean state
+      // This is the most reliable way to ensure no state contamination
+      console.log('Account changed, reloading page...');
+      localStorage.setItem('connectedAccount', accounts[0]);
+      window.location.reload();
     }
   }, [account]);
 
