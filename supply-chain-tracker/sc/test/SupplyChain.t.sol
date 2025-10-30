@@ -498,9 +498,500 @@ contract SupplyChainTest is Test {
     }
     
     // ============================================
-    // PLACEHOLDER FOR FUTURE TESTS
+    // TRANSFER SYSTEM TESTS
     // ============================================
     
-    // Transfer tests will be added in Step 1.7
+    function testTransferFromProducerToFactory() public {
+        // Setup: Producer creates token
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        // Setup: Factory registers
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        // Producer transfers to Factory
+        vm.prank(producer);
+        vm.expectEmit(true, true, true, true);
+        emit TransferRequested(1, producer, factory, 1, 200);
+        supplyChain.transfer(factory, 1, 200);
+        
+        // Verify transfer created
+        SupplyChain.Transfer memory txn = supplyChain.getTransfer(1);
+        assertEq(txn.from, producer);
+        assertEq(txn.to, factory);
+        assertEq(txn.tokenId, 1);
+        assertEq(txn.amount, 200);
+        assertEq(uint(txn.status), uint(SupplyChain.TransferStatus.Pending));
+        
+        // Balances not changed yet (pending)
+        assertEq(supplyChain.getTokenBalance(1, producer), 1000);
+        assertEq(supplyChain.getTokenBalance(1, factory), 0);
+    }
+    
+    function testTransferFromFactoryToRetailer() public {
+        // Setup chain: Producer -> Factory
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        
+        vm.prank(factory);
+        supplyChain.acceptTransfer(1);
+        
+        // Factory creates product
+        vm.prank(factory);
+        supplyChain.createToken("Flour", 100, '{}', 1);
+        
+        // Setup: Retailer registers
+        vm.prank(retailer);
+        supplyChain.requestUserRole("Retailer");
+        supplyChain.changeStatusUser(retailer, SupplyChain.UserStatus.Approved);
+        
+        // Factory transfers to Retailer
+        vm.prank(factory);
+        supplyChain.transfer(retailer, 2, 50);
+        
+        SupplyChain.Transfer memory txn = supplyChain.getTransfer(2);
+        assertEq(txn.from, factory);
+        assertEq(txn.to, retailer);
+        assertEq(txn.tokenId, 2);
+        assertEq(txn.amount, 50);
+    }
+    
+    function testTransferFromRetailerToConsumer() public {
+        // Setup complete chain
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        vm.prank(factory);
+        supplyChain.acceptTransfer(1);
+        vm.prank(factory);
+        supplyChain.createToken("Flour", 100, '{}', 1);
+        
+        vm.prank(retailer);
+        supplyChain.requestUserRole("Retailer");
+        supplyChain.changeStatusUser(retailer, SupplyChain.UserStatus.Approved);
+        vm.prank(factory);
+        supplyChain.transfer(retailer, 2, 50);
+        vm.prank(retailer);
+        supplyChain.acceptTransfer(2);
+        vm.prank(retailer);
+        supplyChain.createToken("Flour Pack", 25, '{}', 2);
+        
+        // Setup: Consumer registers
+        vm.prank(consumer);
+        supplyChain.requestUserRole("Consumer");
+        supplyChain.changeStatusUser(consumer, SupplyChain.UserStatus.Approved);
+        
+        // Retailer transfers to Consumer
+        vm.prank(retailer);
+        supplyChain.transfer(consumer, 3, 10);
+        
+        SupplyChain.Transfer memory txn = supplyChain.getTransfer(3);
+        assertEq(txn.from, retailer);
+        assertEq(txn.to, consumer);
+        assertEq(txn.tokenId, 3);
+        assertEq(txn.amount, 10);
+    }
+    
+    function testAcceptTransfer() public {
+        // Setup
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        
+        // Accept transfer
+        vm.prank(factory);
+        vm.expectEmit(true, false, false, false);
+        emit TransferAccepted(1);
+        supplyChain.acceptTransfer(1);
+        
+        // Verify balances updated
+        assertEq(supplyChain.getTokenBalance(1, producer), 800);
+        assertEq(supplyChain.getTokenBalance(1, factory), 200);
+        
+        // Verify status changed
+        SupplyChain.Transfer memory txn = supplyChain.getTransfer(1);
+        assertEq(uint(txn.status), uint(SupplyChain.TransferStatus.Accepted));
+        
+        // Verify factory has token in list
+        uint256[] memory factoryTokens = supplyChain.getUserTokens(factory);
+        assertEq(factoryTokens.length, 1);
+        assertEq(factoryTokens[0], 1);
+    }
+    
+    function testRejectTransfer() public {
+        // Setup
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        
+        // Reject transfer
+        vm.prank(factory);
+        vm.expectEmit(true, false, false, false);
+        emit TransferRejected(1);
+        supplyChain.rejectTransfer(1);
+        
+        // Verify balances NOT updated
+        assertEq(supplyChain.getTokenBalance(1, producer), 1000);
+        assertEq(supplyChain.getTokenBalance(1, factory), 0);
+        
+        // Verify status changed
+        SupplyChain.Transfer memory txn = supplyChain.getTransfer(1);
+        assertEq(uint(txn.status), uint(SupplyChain.TransferStatus.Rejected));
+    }
+    
+    function testInvalidRoleTransfer() public {
+        // Producer cannot transfer to Retailer (must go to Factory)
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(retailer);
+        supplyChain.requestUserRole("Retailer");
+        supplyChain.changeStatusUser(retailer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        vm.expectRevert("Invalid role transfer");
+        supplyChain.transfer(retailer, 1, 100);
+    }
+    
+    function testConsumerCannotTransfer() public {
+        // Setup: Complete chain to get token to consumer
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        vm.prank(factory);
+        supplyChain.acceptTransfer(1);
+        vm.prank(factory);
+        supplyChain.createToken("Flour", 100, '{}', 1);
+        
+        vm.prank(retailer);
+        supplyChain.requestUserRole("Retailer");
+        supplyChain.changeStatusUser(retailer, SupplyChain.UserStatus.Approved);
+        vm.prank(factory);
+        supplyChain.transfer(retailer, 2, 50);
+        vm.prank(retailer);
+        supplyChain.acceptTransfer(2);
+        vm.prank(retailer);
+        supplyChain.createToken("Flour Pack", 25, '{}', 2);
+        
+        vm.prank(consumer);
+        supplyChain.requestUserRole("Consumer");
+        supplyChain.changeStatusUser(consumer, SupplyChain.UserStatus.Approved);
+        vm.prank(retailer);
+        supplyChain.transfer(consumer, 3, 10);
+        vm.prank(consumer);
+        supplyChain.acceptTransfer(3);
+        
+        // Now consumer has tokens, but still cannot transfer (end of chain)
+        vm.prank(consumer);
+        vm.expectRevert("Consumer cannot transfer");
+        supplyChain.transfer(producer, 3, 5);
+    }
+    
+    function testTransferToSameAddress() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(producer);
+        vm.expectRevert("Cannot transfer to yourself");
+        supplyChain.transfer(producer, 1, 100);
+    }
+    
+    function testTransferInsufficientBalance() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        vm.expectRevert("Insufficient balance");
+        supplyChain.transfer(factory, 1, 2000); // More than balance
+    }
+    
+    function testUnapprovedUserCannotTransfer() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        // Don't approve factory
+        
+        vm.prank(producer);
+        vm.expectRevert("Recipient not approved");
+        supplyChain.transfer(factory, 1, 100);
+    }
+    
+    function testTransferZeroAmount() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        vm.expectRevert("Amount must be greater than 0");
+        supplyChain.transfer(factory, 1, 0);
+    }
+    
+    function testTransferNonExistentToken() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        vm.expectRevert("Invalid token ID");
+        supplyChain.transfer(factory, 999, 100);
+    }
+    
+    function testGetTransfer() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        
+        SupplyChain.Transfer memory txn = supplyChain.getTransfer(1);
+        assertEq(txn.id, 1);
+        assertEq(txn.from, producer);
+        assertEq(txn.to, factory);
+        assertEq(txn.tokenId, 1);
+        assertEq(txn.amount, 200);
+        assertEq(uint(txn.status), uint(SupplyChain.TransferStatus.Pending));
+        assertGt(txn.dateCreated, 0);
+    }
+    
+    function testGetUserTransfers() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        // Create multiple transfers
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 100);
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 50);
+        
+        // Producer has 2 transfers (sender)
+        uint256[] memory producerTransfers = supplyChain.getUserTransfers(producer);
+        assertEq(producerTransfers.length, 2);
+        
+        // Factory has 2 transfers (recipient)
+        uint256[] memory factoryTransfers = supplyChain.getUserTransfers(factory);
+        assertEq(factoryTransfers.length, 2);
+    }
+    
+    function testDoubleAcceptTransfer() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        
+        vm.prank(factory);
+        supplyChain.acceptTransfer(1);
+        
+        // Try to accept again
+        vm.prank(factory);
+        vm.expectRevert("Transfer not pending");
+        supplyChain.acceptTransfer(1);
+    }
+    
+    function testOnlyRecipientCanAccept() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        
+        // Producer tries to accept (sender, not recipient)
+        vm.prank(producer);
+        vm.expectRevert("Only recipient can accept");
+        supplyChain.acceptTransfer(1);
+    }
+    
+    function testOnlyRecipientCanReject() public {
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Wheat", 1000, '{}', 0);
+        
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 200);
+        
+        // Producer tries to reject (sender, not recipient)
+        vm.prank(producer);
+        vm.expectRevert("Only recipient can reject");
+        supplyChain.rejectTransfer(1);
+    }
+    
+    function testCompleteSupplyChainFlow() public {
+        // 1. Producer creates raw material
+        vm.prank(producer);
+        supplyChain.requestUserRole("Producer");
+        supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
+        vm.prank(producer);
+        supplyChain.createToken("Organic Wheat", 1000, '{"origin": "Spain"}', 0);
+        
+        // 2. Producer -> Factory
+        vm.prank(factory);
+        supplyChain.requestUserRole("Factory");
+        supplyChain.changeStatusUser(factory, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 300);
+        vm.prank(factory);
+        supplyChain.acceptTransfer(1);
+        
+        assertEq(supplyChain.getTokenBalance(1, producer), 700);
+        assertEq(supplyChain.getTokenBalance(1, factory), 300);
+        
+        // 3. Factory creates product
+        vm.prank(factory);
+        supplyChain.createToken("Wheat Flour", 150, '{"process": "milled"}', 1);
+        
+        // 4. Factory -> Retailer
+        vm.prank(retailer);
+        supplyChain.requestUserRole("Retailer");
+        supplyChain.changeStatusUser(retailer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(factory);
+        supplyChain.transfer(retailer, 2, 100);
+        vm.prank(retailer);
+        supplyChain.acceptTransfer(2);
+        
+        assertEq(supplyChain.getTokenBalance(2, factory), 50);
+        assertEq(supplyChain.getTokenBalance(2, retailer), 100);
+        
+        // 5. Retailer creates packaged product
+        vm.prank(retailer);
+        supplyChain.createToken("Flour Pack 1kg", 50, '{"package": "retail"}', 2);
+        
+        // 6. Retailer -> Consumer
+        vm.prank(consumer);
+        supplyChain.requestUserRole("Consumer");
+        supplyChain.changeStatusUser(consumer, SupplyChain.UserStatus.Approved);
+        
+        vm.prank(retailer);
+        supplyChain.transfer(consumer, 3, 20);
+        vm.prank(consumer);
+        supplyChain.acceptTransfer(3);
+        
+        assertEq(supplyChain.getTokenBalance(3, retailer), 30);
+        assertEq(supplyChain.getTokenBalance(3, consumer), 20);
+        
+        // 7. Verify complete traceability
+        (, , , , , uint256 token3Parent, ) = supplyChain.getToken(3);
+        assertEq(token3Parent, 2); // Flour Pack derived from Flour
+        
+        (, , , , , uint256 token2Parent, ) = supplyChain.getToken(2);
+        assertEq(token2Parent, 1); // Flour derived from Wheat
+        
+        (, , , , , uint256 token1Parent, ) = supplyChain.getToken(1);
+        assertEq(token1Parent, 0); // Wheat is raw material
+        
+        // Complete supply chain validated! 🎉
+    }
 }
 

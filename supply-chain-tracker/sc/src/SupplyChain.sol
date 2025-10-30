@@ -430,13 +430,13 @@ contract SupplyChain {
         require(toUserId != 0, "Recipient not registered");
         require(users[toUserId].status == UserStatus.Approved, "Recipient not approved");
         
-        // Validate role-based transfer rules
+        // Consumer cannot transfer (end of chain) - check this first
         string memory fromRole = users[fromUserId].role;
+        require(!_compareStrings(fromRole, "Consumer"), "Consumer cannot transfer");
+        
+        // Validate role-based transfer rules
         string memory toRole = users[toUserId].role;
         require(_isValidTransfer(fromRole, toRole), "Invalid role transfer");
-        
-        // Consumer cannot transfer (end of chain)
-        require(!_compareStrings(fromRole, "Consumer"), "Consumer cannot transfer");
         
         uint256 transferId = nextTransferId++;
         Transfer storage newTransfer = transfers[transferId];
