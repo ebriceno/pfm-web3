@@ -202,10 +202,110 @@ contract SupplyChain {
     }
     
     // ============================================
-    // FUNCTIONS (TO BE IMPLEMENTED IN NEXT STEPS)
+    // USER MANAGEMENT FUNCTIONS
     // ============================================
     
-    // User Management Functions will be added in Step 1.2
+    /**
+     * @notice Allows a user to request a role in the system
+     * @param role The requested role (Producer, Factory, Retailer, Consumer)
+     */
+    function requestUserRole(string memory role) public {
+        require(addressToUserId[msg.sender] == 0, "User already registered");
+        require(_isValidRole(role), "Invalid role");
+        
+        uint256 userId = nextUserId++;
+        User storage newUser = users[userId];
+        newUser.id = userId;
+        newUser.userAddress = msg.sender;
+        newUser.role = role;
+        newUser.status = UserStatus.Pending;
+        
+        addressToUserId[msg.sender] = userId;
+        
+        emit UserRoleRequested(msg.sender, role);
+    }
+    
+    /**
+     * @notice Admin changes user status (approve/reject)
+     * @param userAddress Address of the user
+     * @param newStatus New status to set
+     */
+    function changeStatusUser(address userAddress, UserStatus newStatus) public onlyAdmin {
+        uint256 userId = addressToUserId[userAddress];
+        require(userId != 0, "User not found");
+        
+        users[userId].status = newStatus;
+        
+        emit UserStatusChanged(userAddress, newStatus);
+    }
+    
+    /**
+     * @notice Gets information about a user
+     * @param userAddress Address of the user
+     * @return User struct with user information
+     */
+    function getUserInfo(address userAddress) public view returns (User memory) {
+        uint256 userId = addressToUserId[userAddress];
+        require(userId != 0, "User not found");
+        return users[userId];
+    }
+    
+    /**
+     * @notice Checks if an address is the admin
+     * @param userAddress Address to check
+     * @return bool True if address is admin
+     */
+    function isAdmin(address userAddress) public view returns (bool) {
+        return userAddress == admin;
+    }
+    
+    // ============================================
+    // INTERNAL HELPER FUNCTIONS
+    // ============================================
+    
+    /**
+     * @notice Validates if a role string is valid
+     * @param role Role string to validate
+     * @return bool True if role is valid
+     */
+    function _isValidRole(string memory role) internal pure returns (bool) {
+        return _compareStrings(role, "Producer") ||
+               _compareStrings(role, "Factory") ||
+               _compareStrings(role, "Retailer") ||
+               _compareStrings(role, "Consumer");
+    }
+    
+    /**
+     * @notice Validates if a transfer between two roles is allowed
+     * @param fromRole Role of the sender
+     * @param toRole Role of the recipient
+     * @return bool True if transfer is valid
+     */
+    function _isValidTransfer(string memory fromRole, string memory toRole) internal pure returns (bool) {
+        if (_compareStrings(fromRole, "Producer")) {
+            return _compareStrings(toRole, "Factory");
+        } else if (_compareStrings(fromRole, "Factory")) {
+            return _compareStrings(toRole, "Retailer");
+        } else if (_compareStrings(fromRole, "Retailer")) {
+            return _compareStrings(toRole, "Consumer");
+        }
+        return false;
+    }
+    
+    /**
+     * @notice Compares two strings for equality
+     * @param a First string
+     * @param b Second string
+     * @return bool True if strings are equal
+     */
+    function _compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return keccak256(abi.encodePacked(a)) == keccak256(abi.encodePacked(b));
+    }
+    
+    // ============================================
+    // PLACEHOLDER SECTIONS FOR FUTURE FUNCTIONS
+    // ============================================
+    
     // Token Management Functions will be added in Step 1.4
     // Transfer Management Functions will be added in Step 1.6
 }
